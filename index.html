@@ -63,14 +63,19 @@
             margin: 0;
         }
         .result-item {
-            padding: 12px 16px;
+            padding: 14px 16px;
             border-bottom: 1px solid #edf2f7;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column; /* 改為上下排列，手機上看比較舒適 */
+            gap: 6px;
         }
         .result-item:last-child {
             border-bottom: none;
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .keyword-tag {
             font-size: 12px;
@@ -83,8 +88,18 @@
         .product-code {
             font-family: monospace;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             color: #1a202c;
+            background: #f7fafc;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+        .product-name {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.4;
+            padding-left: 2px;
         }
         .empty-state {
             text-align: center;
@@ -99,7 +114,7 @@
     <h2>商品代號快速查詢</h2>
     
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="輸入快速碼關鍵字..." autocomplete="off">
+        <input type="text" id="searchInput" placeholder="輸入快速碼關鍵字...規則:去除所有英文只剩數字｜552bk35=55235｜2472cm235=247235｜bj-1835=1825" autocomplete="off">
     </div>
     <div id="status" class="status">資料載入中...</div>
 
@@ -109,13 +124,12 @@
 </div>
 
 <script>
-    let searchMap = new Map(); // 用來存放 快速碼 -> 商品代號陣列 的對應
+    let searchMap = new Map(); // 用來存放 快速碼 -> 商品物件陣列 的對應
 
     // 載入並解析 CSV 資料
     async function loadData() {
         const statusEl = document.getElementById('status');
         try {
-            // 讀取同目錄下的 data.csv，加上時間戳記防止瀏覽器快取舊資料
             const response = await fetch(`data.csv?t=${new Date().getTime()}`);
             if (!response.ok) throw new Error('找不到資料檔 data.csv');
             
@@ -130,28 +144,32 @@
         }
     }
 
-    // 解析 CSV 邏輯
+    // 解析 CSV 邏輯 (包含 A、B、C 三個欄位)
     function parseCSV(text) {
         const lines = text.split(/\r?\n/);
         
-        // 略過第一行標題（如果你的 Excel 有標題列的話）
-        // 如果 Excel 第一行就是資料，請把 i = 1 改成 i = 0
+        // 略過第一行標題。如果 Excel 第一行就是資料，請把 i = 1 改成 i = 0
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // 拆分 A 欄與 B 欄
+            // 拆分欄位
             const columns = line.split(',');
             if (columns.length >= 2) {
                 const keyword = columns[0].trim().toLowerCase();
                 const productCode = columns[1].trim();
+                // 讀取 C 欄（商品全名），如果沒填就預設留空
+                const productName = columns[2] ? columns[2].trim() : ''; 
 
                 if (keyword && productCode) {
-                    // 實現一對多邏輯：如果關鍵字已存在，就把新代碼 push 進去，否則建立新陣列
                     if (!searchMap.has(keyword)) {
                         searchMap.set(keyword, []);
                     }
-                    searchMap.get(keyword).push(productCode);
+                    // 將商品代號與全名打包成一個物件存入陣列
+                    searchMap.get(keyword).push({
+                        code: productCode,
+                        name: productName
+                    });
                 }
             }
         }
@@ -161,25 +179,29 @@
     function doSearch() {
         const query = document.getElementById('searchInput').value.trim().toLowerCase();
         const resultList = document.getElementById('resultList');
-        resultList.innerHTML = ''; // 清空畫面
+        resultList.innerHTML = ''; 
 
         if (!query) {
-            return; // 沒有輸入就不顯示
+            return; 
         }
 
         let hasResults = false;
 
-        // 模糊搜尋：只要快速碼包含輸入的字就抓出來
-        for (let [keyword, codes] of searchMap.entries()) {
+        for (let [keyword, items] of searchMap.entries()) {
             if (keyword.includes(query)) {
                 hasResults = true;
-                // 一個快速碼底下的多個結果依序輸出
-                codes.forEach(code => {
+                
+                items.forEach(item => {
                     const li = document.createElement('li');
                     li.className = 'result-item';
+                    
+                    // 畫面呈現：上方顯示快速碼與商品代號，下方顯示商品全名
                     li.innerHTML = `
-                        <span class="keyword-tag">${keyword.toUpperCase()}</span>
-                        <span class="product-code">${code}</span>
+                        <div class="item-header">
+                            <span class="keyword-tag">${keyword.toUpperCase()}</span>
+                            <span class="product-code">${item.code}</span>
+                        </div>
+                        <div class="product-name">${item.name || '(未提供品名)'}</div>
                     `;
                     resultList.appendChild(li);
                 });
@@ -191,10 +213,7 @@
         }
     }
 
-    // 監聽輸入事件（即時搜尋）
     document.getElementById('searchInput').addEventListener('input', doSearch);
-
-    // 初始化載入
     window.addEventListener('DOMContentLoaded', loadData);
 </script>
 
