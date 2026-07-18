@@ -66,7 +66,7 @@
             padding: 14px 16px;
             border-bottom: 1px solid #edf2f7;
             display: flex;
-            flex-direction: column; /* 改為上下排列，手機上看比較舒適 */
+            flex-direction: column;
             gap: 6px;
         }
         .result-item:last-child {
@@ -85,15 +85,28 @@
             border-radius: 4px;
             font-weight: bold;
         }
+        /* 改造商品代號按鈕：增加滑鼠指標、過渡動畫 */
         .product-code {
             font-family: monospace;
             font-size: 16px;
             font-weight: 700;
             color: #1a202c;
             background: #f7fafc;
-            padding: 2px 6px;
+            padding: 4px 8px;
             border-radius: 4px;
             border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none; /* 避免重複點選時藍色選取陰影 */
+            position: relative;
+        }
+        /* 滑鼠懸停與點擊效果 */
+        .product-code:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        .product-code:active {
+            transform: scale(0.95);
         }
         .product-name {
             font-size: 14px;
@@ -106,6 +119,24 @@
             color: #a0aec0;
             padding: 30px 0;
         }
+        
+        /* 提示已複製的小標籤 */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            z-index: 999;
+        }
+        .toast.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -114,7 +145,7 @@
     <h2>商品代號快速查詢</h2>
     
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="輸入快速碼關鍵字...規則:去除所有英文只剩數字｜552bk35=55235｜2472cm235=247235｜bj-1835=1825" autocomplete="off">
+        <input type="text" id="searchInput" placeholder="輸入快速碼，規則:去除英文只剩數字｜552bk35=55235｜2472cm235=247235｜bj-1835=1825" autocomplete="off">
     </div>
     <div id="status" class="status">資料載入中...</div>
 
@@ -123,10 +154,12 @@
     </ul>
 </div>
 
-<script>
-    let searchMap = new Map(); // 用來存放 快速碼 -> 商品物件陣列 的對應
+<!-- 複製成功的提示彈窗 -->
+<div id="toast" class="toast">已複製到剪貼簿</div>
 
-    // 載入並解析 CSV 資料
+<script>
+    let searchMap = new Map();
+
     async function loadData() {
         const statusEl = document.getElementById('status');
         try {
@@ -144,28 +177,23 @@
         }
     }
 
-    // 解析 CSV 邏輯 (包含 A、B、C 三個欄位)
     function parseCSV(text) {
         const lines = text.split(/\r?\n/);
         
-        // 略過第一行標題。如果 Excel 第一行就是資料，請把 i = 1 改成 i = 0
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // 拆分欄位
             const columns = line.split(',');
             if (columns.length >= 2) {
                 const keyword = columns[0].trim().toLowerCase();
                 const productCode = columns[1].trim();
-                // 讀取 C 欄（商品全名），如果沒填就預設留空
                 const productName = columns[2] ? columns[2].trim() : ''; 
 
                 if (keyword && productCode) {
                     if (!searchMap.has(keyword)) {
                         searchMap.set(keyword, []);
                     }
-                    // 將商品代號與全名打包成一個物件存入陣列
                     searchMap.get(keyword).push({
                         code: productCode,
                         name: productName
@@ -175,7 +203,28 @@
         }
     }
 
-    // 搜尋與渲染邏輯
+    // 核心複製功能
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`已複製：${text}`);
+        }).catch(err => {
+            console.error('複製失敗', err);
+        });
+    }
+
+    // 顯示提示標籤
+    let toastTimeout;
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.classList.add('show');
+        
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 1500); // 1.5 秒後自動消失
+    }
+
     function doSearch() {
         const query = document.getElementById('searchInput').value.trim().toLowerCase();
         const resultList = document.getElementById('resultList');
@@ -195,11 +244,11 @@
                     const li = document.createElement('li');
                     li.className = 'result-item';
                     
-                    // 畫面呈現：上方顯示快速碼與商品代號，下方顯示商品全名
+                    // 在 product-code 的標籤上綁定 onclick 事件
                     li.innerHTML = `
                         <div class="item-header">
                             <span class="keyword-tag">${keyword.toUpperCase()}</span>
-                            <span class="product-code">${item.code}</span>
+                            <span class="product-code" onclick="copyToClipboard('${item.code}')" title="點擊複製">${item.code}</span>
                         </div>
                         <div class="product-name">${item.name || '(未提供品名)'}</div>
                     `;
