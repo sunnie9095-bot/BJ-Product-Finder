@@ -188,43 +188,70 @@
     }
 
     // 解析 CSV 邏輯 (支援 A, B, C 與 Q 欄位)
-    function parseCSV(text) {
-        const lines = text.split(/\r?\n/);
-        
-        // 略過第一行標題，從第二行開始讀取
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
+    // 替換原本的 parseCSV 函式
+function parseCSV(text) {
+    const lines = text.split(/\r?\n/);
+    
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
 
-            const columns = line.split(',');
-            if (columns.length >= 2) {
-                const keyword = columns[0].trim().toLowerCase(); // A 欄：快速碼
-                const productCode = columns[1].trim();          // B 欄：商品代號
-                const productName = columns[2] ? columns[2].trim() : ''; // C 欄：商品全名
-                
-                // Q 欄位在 CSV 索引中是第 16（因為從 0 開始數：A=0, B=1, C=2 ... Q=16）
-                let price = columns[17] ? columns[17].trim() : '';
-                
-                // 如果價格有數值，加上千分位標點或 $ 記號（若已有字串則直接顯示）
-                if (price && !isNaN(price.replace(/,/g, ''))) {
-                    price = '$' + Number(price.replace(/,/g, '')).toLocaleString();
-                } else if (price && !price.startsWith('$')) {
-                    price = '$' + price;
-                }
+        // 使用正則表達式精準拆分 CSV 欄位（能正確處理引號中的逗號）
+        const columns = parseCSVLine(line);
 
-                if (keyword && productCode) {
-                    if (!searchMap.has(keyword)) {
-                        searchMap.set(keyword, []);
-                    }
-                    searchMap.get(keyword).push({
-                        code: productCode,
-                        name: productName,
-                        price: price
-                    });
+        if (columns.length >= 2) {
+            const keyword = columns[0].trim().toLowerCase(); // A 欄：快速碼
+            const productCode = columns[1].trim();          // B 欄：商品代號
+            const productName = columns[2] ? columns[2].trim() : ''; // C 欄：商品全名
+            
+            // Q 欄位在索引中確實是第 16（A=0, B=1, C=2 ... Q=16）
+            let rawPrice = columns[16] ? columns[16].trim() : '';
+            
+            // 清理價格字串：去雙引號、去錢號、去原本的逗號
+            let cleanPrice = rawPrice.replace(/["$,]/g, '').trim();
+            let price = '';
+
+            // 判斷轉成數字並重新格式化
+            if (cleanPrice && !isNaN(cleanPrice)) {
+                price = '$' + Number(cleanPrice).toLocaleString();
+            } else if (rawPrice) {
+                price = rawPrice.replace(/"/g, ''); // 若有其他字串內容，僅去掉雙引號後呈現
+            }
+
+            if (keyword && productCode) {
+                if (!searchMap.has(keyword)) {
+                    searchMap.set(keyword, []);
                 }
+                searchMap.get(keyword).push({
+                    code: productCode,
+                    name: productName,
+                    price: price
+                });
             }
         }
     }
+}
+
+// 專門處理 CSV 引號與逗號的工具函式
+function parseCSVLine(text) {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === '"') {
+            inQuotes = !inQuotes;
+        } else if (c === ',' && !inQuotes) {
+            result.push(cur);
+            cur = '';
+        } else {
+            cur += c;
+        }
+    }
+    result.push(cur);
+    return result;
+}
 
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
