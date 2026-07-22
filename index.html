@@ -203,7 +203,7 @@
                 const productName = columns[2] ? columns[2].trim() : ''; // C 欄：商品全名
                 
                 // Q 欄位在 CSV 索引中是第 16（因為從 0 開始數：A=0, B=1, C=2 ... Q=16）
-                let price = columns[16] ? columns[16].trim() : '';
+                let price = columns[17] ? columns[17].trim() : '';
                 
                 // 如果價格有數值，加上千分位標點或 $ 記號（若已有字串則直接顯示）
                 if (price && !isNaN(price.replace(/,/g, ''))) {
