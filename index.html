@@ -85,7 +85,6 @@
             border-radius: 4px;
             font-weight: bold;
         }
-        /* 改造商品代號按鈕：增加滑鼠指標、過渡動畫 */
         .product-code {
             font-family: monospace;
             font-size: 16px;
@@ -97,10 +96,9 @@
             border: 1px solid #e2e8f0;
             cursor: pointer;
             transition: all 0.15s ease;
-            user-select: none; /* 避免重複點選時藍色選取陰影 */
+            user-select: none;
             position: relative;
         }
-        /* 滑鼠懸停與點擊效果 */
         .product-code:hover {
             background: #edf2f7;
             border-color: #cbd5e0;
@@ -108,11 +106,25 @@
         .product-code:active {
             transform: scale(0.95);
         }
+        .item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-top: 2px;
+        }
         .product-name {
             font-size: 14px;
             color: #4a5568;
             line-height: 1.4;
-            padding-left: 2px;
+            flex: 1;
+        }
+        /* 價格標籤樣式 */
+        .product-price {
+            font-size: 15px;
+            font-weight: 700;
+            color: #e53e3e; /* 醒目的紅色 */
+            white-space: nowrap;
         }
         .empty-state {
             text-align: center;
@@ -120,7 +132,6 @@
             padding: 30px 0;
         }
         
-        /* 提示已複製的小標籤 */
         .toast {
             position: fixed;
             bottom: 30px;
@@ -145,16 +156,15 @@
     <h2>商品代號快速查詢</h2>
     
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="規則:去除所有英文只剩數字｜552bk35=55235｜2472cm235=247235｜bj-1835=1825" autocomplete="off">
+        <input type="text" id="searchInput" placeholder="輸入快速碼關鍵字..." autocomplete="off">
     </div>
-    <div id="status" class="status">規則:去除所有英文只剩數字｜552bk35=55235｜2472cm235=247235｜bj-1835=1825</div>
+    <div id="status" class="status">資料載入中...</div>
 
     <ul id="resultList" class="result-list">
         <!-- 搜尋結果會顯示在這裡 -->
     </ul>
 </div>
 
-<!-- 複製成功的提示彈窗 -->
 <div id="toast" class="toast">已複製到剪貼簿</div>
 
 <script>
@@ -177,18 +187,30 @@
         }
     }
 
+    // 解析 CSV 邏輯 (支援 A, B, C 與 Q 欄位)
     function parseCSV(text) {
         const lines = text.split(/\r?\n/);
         
+        // 略過第一行標題，從第二行開始讀取
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
             const columns = line.split(',');
             if (columns.length >= 2) {
-                const keyword = columns[0].trim().toLowerCase();
-                const productCode = columns[1].trim();
-                const productName = columns[2] ? columns[2].trim() : ''; 
+                const keyword = columns[0].trim().toLowerCase(); // A 欄：快速碼
+                const productCode = columns[1].trim();          // B 欄：商品代號
+                const productName = columns[2] ? columns[2].trim() : ''; // C 欄：商品全名
+                
+                // Q 欄位在 CSV 索引中是第 16（因為從 0 開始數：A=0, B=1, C=2 ... Q=16）
+                let price = columns[16] ? columns[16].trim() : '';
+                
+                // 如果價格有數值，加上千分位標點或 $ 記號（若已有字串則直接顯示）
+                if (price && !isNaN(price.replace(/,/g, ''))) {
+                    price = '$' + Number(price.replace(/,/g, '')).toLocaleString();
+                } else if (price && !price.startsWith('$')) {
+                    price = '$' + price;
+                }
 
                 if (keyword && productCode) {
                     if (!searchMap.has(keyword)) {
@@ -196,14 +218,14 @@
                     }
                     searchMap.get(keyword).push({
                         code: productCode,
-                        name: productName
+                        name: productName,
+                        price: price
                     });
                 }
             }
         }
     }
 
-    // 核心複製功能
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             showToast(`已複製：${text}`);
@@ -212,7 +234,6 @@
         });
     }
 
-    // 顯示提示標籤
     let toastTimeout;
     function showToast(message) {
         const toast = document.getElementById('toast');
@@ -222,7 +243,7 @@
         clearTimeout(toastTimeout);
         toastTimeout = setTimeout(() => {
             toast.classList.remove('show');
-        }, 1500); // 1.5 秒後自動消失
+        }, 1500);
     }
 
     function doSearch() {
@@ -244,13 +265,15 @@
                     const li = document.createElement('li');
                     li.className = 'result-item';
                     
-                    // 在 product-code 的標籤上綁定 onclick 事件
                     li.innerHTML = `
                         <div class="item-header">
                             <span class="keyword-tag">${keyword.toUpperCase()}</span>
                             <span class="product-code" onclick="copyToClipboard('${item.code}')" title="點擊複製">${item.code}</span>
                         </div>
-                        <div class="product-name">${item.name || '(未提供品名)'}</div>
+                        <div class="item-footer">
+                            <div class="product-name">${item.name || '(未提供品名)'}</div>
+                            ${item.price ? `<div class="product-price">${item.price}</div>` : ''}
+                        </div>
                     `;
                     resultList.appendChild(li);
                 });
